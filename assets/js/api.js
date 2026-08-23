@@ -47,6 +47,31 @@ async function renderProjects(target){
   }catch(error){showAPIError(target,'실적 자료 준비 중입니다.')}
 }
 
+async function initPortfolioArchive(){
+  const target=document.querySelector('#projectList');if(!target)return;
+  const search=document.querySelector('#portfolioSearch'),category=document.querySelector('#portfolioCategory'),year=document.querySelector('#portfolioYear'),sort=document.querySelector('#portfolioSort'),count=document.querySelector('#portfolioCount'),pagination=document.querySelector('#portfolioPagination');
+  const state={rows:[],page:1,pageSize:25};
+  const bodyValue=(item,key)=>item.body&&typeof item.body==='object'?(item.body[key]||''):'';
+  const draw=()=>{
+    const q=search.value.trim().toLowerCase();
+    let rows=state.rows.filter(item=>(!category.value||item.category===category.value)&&(!year.value||String(item.year)===year.value)&&(!q||`${item.title} ${item.client} ${item.category} ${bodyValue(item,'region')} ${bodyValue(item,'note')}`.toLowerCase().includes(q)));
+    rows.sort((a,b)=>{if(sort.value==='year-asc')return(+a.year||0)-(+b.year||0)||a.title.localeCompare(b.title,'ko');if(sort.value==='category')return(a.category||'').localeCompare(b.category||'','ko')||(+b.year||0)-(+a.year||0);if(sort.value==='title')return a.title.localeCompare(b.title,'ko');return(+b.year||0)-(+a.year||0)||a.title.localeCompare(b.title,'ko')});
+    count.textContent=rows.length.toLocaleString('ko-KR');
+    const pages=Math.max(1,Math.ceil(rows.length/state.pageSize));state.page=Math.min(state.page,pages);
+    const visible=rows.slice((state.page-1)*state.pageSize,state.page*state.pageSize);
+    target.innerHTML=visible.length?visible.map(item=>{const extra=[bodyValue(item,'region'),bodyValue(item,'diagnosis_grade'),bodyValue(item,'note')].filter(Boolean).join(' · ');return `<tr><td data-label="연도"><strong>${escapeHTML(item.year||'-')}</strong></td><td data-label="사업 분야"><span class="portfolio-category">${escapeHTML(item.category||'-')}</span></td><td data-label="용역명"><strong class="portfolio-project">${escapeHTML(item.title)}</strong>${item.summary?`<small>${escapeHTML(item.summary)}</small>`:''}</td><td data-label="발주기관">${escapeHTML(item.client||'-')}</td><td data-label="지역·비고">${escapeHTML(extra||'-')}</td></tr>`}).join(''):'<tr><td colspan="5" class="empty">조건에 맞는 실적이 없습니다.</td></tr>';
+    const from=Math.max(1,Math.min(state.page-2,pages-4)),to=Math.min(pages,from+4);let buttons=`<button type="button" data-page="${state.page-1}" ${state.page===1?'disabled':''}>이전</button>`;for(let p=from;p<=to;p++)buttons+=`<button type="button" data-page="${p}" class="${p===state.page?'active':''}">${p}</button>`;buttons+=`<button type="button" data-page="${state.page+1}" ${state.page===pages?'disabled':''}>다음</button>`;pagination.innerHTML=buttons;
+  };
+  try{
+    state.rows=await requestContent('portfolio');
+    [...new Set(state.rows.map(x=>x.category).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko')).forEach(x=>category.insertAdjacentHTML('beforeend',`<option value="${escapeHTML(x)}">${escapeHTML(x)}</option>`));
+    [...new Set(state.rows.map(x=>String(x.year)).filter(Boolean))].sort((a,b)=>+b-+a).forEach(x=>year.insertAdjacentHTML('beforeend',`<option value="${escapeHTML(x)}">${escapeHTML(x)}년</option>`));draw();
+  }catch(error){target.innerHTML='<tr><td colspan="5" class="empty">실적 자료를 불러오지 못했습니다.</td></tr>'}
+  [search,category,year,sort].forEach(control=>control.addEventListener(control===search?'input':'change',()=>{state.page=1;draw()}));
+  pagination.addEventListener('click',event=>{const button=event.target.closest('[data-page]');if(!button||button.disabled)return;state.page=+button.dataset.page;draw();document.querySelector('.portfolio-toolbar')?.scrollIntoView({behavior:'smooth',block:'start'})});
+  document.querySelector('#portfolioReset')?.addEventListener('click',()=>{search.value='';category.value='';year.value='';sort.value='year-desc';state.page=1;draw()});
+}
+
 async function renderMainBusinesses(target,limit=3){
   try{
     const rows=(await requestContent('business')).slice(0,limit);
