@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="기장엔지니어링 사업분야"><title>사업분야 | 기장엔지니어링</title>
-  <link rel="icon" type="image/png" href="assets/images/kj-symbol.png"><link rel="stylesheet" href="assets/css/style.css">
+  <link rel="icon" type="image/png" href="assets/images/kj-symbol.png"><link rel="stylesheet" href="assets/css/style.css"><link rel="stylesheet" href="assets/css/api-content.css">
   <style>
     .business-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:48px}.business-tab{min-height:116px;padding:20px;border:1px solid var(--line);color:var(--ink);background:#fff;text-align:left;cursor:pointer;transition:.2s}.business-tab small{display:block;margin-bottom:7px;color:var(--red);font:800 9px Manrope;letter-spacing:.12em}.business-tab strong{font-size:17px}.business-tab:hover,.business-tab.active{border-color:var(--blue);color:#fff;background:var(--blue);transform:translateY(-3px)}.business-panel{display:none}.business-panel.active{display:block}.business-panel-head{display:grid;grid-template-columns:220px 1fr;gap:45px;margin-bottom:45px;padding-bottom:30px;border-bottom:1px solid var(--line)}.business-panel-head .number{color:var(--red);font:800 54px/1 Manrope}.business-panel h2{margin:0 0 14px;font-size:clamp(30px,4vw,46px);letter-spacing:-.05em}.business-panel h3{margin:38px 0 12px;font-size:21px}.business-panel p,.business-panel li{color:var(--muted)}.business-panel ul,.business-panel ol{padding-left:22px}.business-images{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:24px}.business-images.single{grid-template-columns:1fr}.business-images img{width:100%;height:auto;padding:10px;border:1px solid var(--line);background:#fff}.business-table{width:100%;margin-top:20px;border-collapse:collapse;font-size:13px}.business-table th,.business-table td{padding:14px;border:1px solid var(--line);text-align:left;vertical-align:top}.business-table th{background:var(--soft)}
     @media(max-width:850px){.business-tabs{grid-template-columns:repeat(2,1fr)}.business-panel-head{grid-template-columns:1fr;gap:15px}.business-images{grid-template-columns:1fr}}
@@ -50,8 +50,8 @@
 </main>
 
 <footer><div class="container"><div class="footer-grid"><div class="footer-brand"><div class="logo"><img class="logo-image" src="assets/images/kj-symbol.png" alt=""><strong>기장엔지니어링</strong></div><p>더 안전하고 지속 가능한 내일을 설계합니다.</p></div><div class="footer-info"><div><small>ADDRESS</small>(04756) 서울특별시 성동구 마장로 331, 5층<br>(태상빌딩, 마장동)</div></div></div><div class="copyright"><span>© KI-JANG ENGINEERING. All Rights Reserved.</span></div></div></footer>
-<script src="assets/js/common.js"></script><script>
+<script src="assets/js/common.js"></script><script src="assets/js/api.js"></script><script>
 const tabs=[...document.querySelectorAll('.business-tab')],panels=[...document.querySelectorAll('.business-panel')];
 function showBusiness(id,scroll=false){if(!document.getElementById(id))id='design';tabs.forEach(t=>t.classList.toggle('active',t.dataset.target===id));panels.forEach(p=>p.classList.toggle('active',p.id===id));history.replaceState(null,'',`?section=${id}`);if(scroll)document.querySelector('#businessContent').scrollIntoView({behavior:'smooth'});}
-tabs.forEach(t=>t.addEventListener('click',()=>showBusiness(t.dataset.target,true)));showBusiness(new URLSearchParams(location.search).get('section')||'design');
+tabs.forEach(t=>t.addEventListener('click',()=>showBusiness(t.dataset.target,true)));showBusiness(new URLSearchParams(location.search).get('section')||'design');hydrateBusinessPage();
 </script></body></html>
