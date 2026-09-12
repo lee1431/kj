@@ -80,8 +80,42 @@ async function renderMainBusinesses(target,limit=3){
       'https://images.unsplash.com/photo-1504917595217-d4dc5ebe6122?auto=format&fit=crop&w=900&q=84',
       'https://images.unsplash.com/photo-1531053326607-9d349096d887?auto=format&fit=crop&w=900&q=84'
     ];
-    target.innerHTML=rows.map((item,index)=>{const cover=item.media?.[0];return `<a class="card" href="business.html?section=${encodeURIComponent(item.slug)}" style="--image:url('${cover?mediaURL(cover.url):fallback[index%fallback.length]}')"><small>${String(index+1).padStart(2,'0')} / ENGINEERING</small><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(item.summary)}</p></a>`}).join('');
+    const emptyVisuals=['linear-gradient(135deg,#31546a,#132c3a)','linear-gradient(135deg,#3d5060,#172a35)','linear-gradient(135deg,#385d65,#19343a)'];
+    target.innerHTML=rows.map((item,index)=>{
+      const cover=(item.media||[]).filter(media=>media.section==='gallery').sort((a,b)=>(a.sort_order||0)-(b.sort_order||0))[0];
+      const managed=item.body?.media_sections_managed?.includes('gallery');
+      const visual=cover?`url("${mediaURL(cover.url).replace(/"/g,'%22')}")`:managed?emptyVisuals[index%emptyVisuals.length]:`url("${fallback[index%fallback.length]}")`;
+      return `<a class="card" href="business.html?section=${encodeURIComponent(item.slug)}" style="--image:${escapeHTML(visual)}"><small>${String(index+1).padStart(2,'0')} / ENGINEERING</small><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(item.summary)}</p></a>`
+    }).join('');
   }catch(error){showAPIError(target,'사업분야 준비 중입니다.')}
+}
+
+async function hydrateHomePage(){
+  try{
+    const [item]=await requestContent('about');if(!item)return;
+    const body=item.body||{};
+    const fields={
+      'home-hero-kicker':body.home_hero_kicker,
+      'home-hero-title':body.home_hero_title,
+      'home-hero-emphasis':body.home_hero_emphasis,
+      'home-hero-summary':body.home_hero_summary,
+      'home-intro-summary':body.home_intro_summary
+    };
+    Object.entries(fields).forEach(([name,value])=>{const node=document.querySelector(`[data-${name}]`);if(node&&value)node.textContent=value});
+    const introTitle=document.querySelector('[data-home-intro-title]');
+    if(introTitle&&body.home_intro_title)introTitle.innerHTML=escapeHTML(body.home_intro_title).replace(/\n/g,'<br>');
+
+    const mediaBySection=(item.media||[]).reduce((all,media)=>((all[media.section]||=[]).push(media),all),{});
+    Object.values(mediaBySection).forEach(media=>media.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)));
+    const managed=new Set(body.media_sections_managed||[]);
+    const hero=document.querySelector('[data-home-media="home_hero"]'),heroMedia=mediaBySection.home_hero?.[0];
+    if(heroMedia)hero?.style.setProperty('--hero-image',`url("${mediaURL(heroMedia.url).replace(/"/g,'%22')}")`);
+    else if(managed.has('home_hero'))hero?.style.setProperty('--hero-image','linear-gradient(135deg,#0b2839,#173f54)');
+
+    const intro=document.querySelector('[data-home-media="home_intro"]'),introGrid=document.querySelector('[data-home-intro-grid]'),introMedia=mediaBySection.home_intro?.[0];
+    if(introMedia&&intro){intro.hidden=false;intro.src=mediaURL(introMedia.url);intro.alt=introMedia.alt||intro.alt;introGrid?.classList.remove('no-image')}
+    else if(managed.has('home_intro')&&intro){intro.hidden=true;introGrid?.classList.add('no-image')}
+  }catch(error){console.warn('Home API unavailable',error)}
 }
 
 async function hydrateAboutPage(){
@@ -94,9 +128,17 @@ async function hydrateAboutPage(){
     const facts={founded:body.founded,capital:body.capital,address:body.address};
     Object.entries(facts).forEach(([key,value])=>{const node=document.querySelector(`[data-about-${key}]`);if(node&&value)node.textContent=value});
     const grouped=Object.groupBy?Object.groupBy(item.media||[],x=>x.section):(item.media||[]).reduce((all,x)=>((all[x.section]||=[]).push(x),all),{});
+    (body.media_sections_managed||[]).forEach(section=>{
+      if(grouped[section]?.length)return;
+      const node=document.querySelector(`[data-about-media="${section}"]`);if(!node)return;
+      if(node.tagName==='IMG')node.hidden=true;else node.innerHTML='';
+    });
     Object.entries(grouped).forEach(([section,media])=>{
-      const fallbackSelector={organization:'#organization .image-card',people:'#people .image-grid',licenses:'#licenses .image-grid',equipment:'#equipment .image-grid',location_desktop:'#location',location_mobile:'#location'}[section];
-      const node=document.querySelector(`[data-about-media="${section}"]`)||document.querySelector(fallbackSelector); if(!node||!media.length)return;
+      const node=document.querySelector(`[data-about-media="${section}"]`);if(!node||!media.length)return;
+      media.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+      if(node.tagName==='IMG'){
+        node.hidden=false;node.src=mediaURL(media[0].url);node.alt=media[0].alt||node.alt;return;
+      }
       node.innerHTML=media.map(image=>`<div class="image-card"><img src="${mediaURL(image.url)}" alt="${escapeHTML(image.alt)}"></div>`).join('');
     });
   }catch(error){console.warn('About API unavailable',error)}
@@ -114,7 +156,9 @@ async function hydrateBusinessPage(){
       const summary=panel.querySelector('.business-panel-head p');if(summary&&item.summary)summary.textContent=item.summary;
       const content=plainText(item.body);
       if(content){let managed=panel.querySelector('.managed-content');if(!managed){managed=document.createElement('div');managed.className='managed-content';panel.append(managed)}managed.innerHTML=escapeHTML(content).replace(/\n/g,'<br>')}
-      if(item.media?.length){let gallery=panel.querySelector('.managed-gallery');if(!gallery){gallery=document.createElement('div');gallery.className='business-images managed-gallery';panel.append(gallery)}gallery.innerHTML=item.media.map(image=>`<img src="${mediaURL(image.url)}" alt="${escapeHTML(image.alt)}">`).join('')}
+      const managedGallery=item.body?.media_sections_managed?.includes('gallery');
+      if(managedGallery)panel.querySelectorAll('.business-images').forEach(gallery=>gallery.remove());
+      if(item.media?.length){let gallery=panel.querySelector('.managed-gallery');if(!gallery){gallery=document.createElement('div');gallery.className='business-images managed-gallery';panel.append(gallery)}gallery.innerHTML=item.media.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map(image=>`<img src="${mediaURL(image.url)}" alt="${escapeHTML(image.alt)}">`).join('')}
     });
   }catch(error){console.warn('Business API unavailable',error)}
 }
