@@ -125,7 +125,8 @@ async function hydrateAboutPage(){
     const title=document.querySelector('[data-about-title]'); if(title&&body.greeting_title) title.textContent=body.greeting_title;
     const paragraphs=document.querySelector('[data-about-paragraphs]'); if(paragraphs&&Array.isArray(body.greeting_paragraphs)) paragraphs.innerHTML=body.greeting_paragraphs.map(text=>`<p>${escapeHTML(text)}</p>`).join('');
     const ceo=document.querySelector('[data-about-ceo]'); if(ceo&&body.ceo) ceo.textContent=body.ceo;
-    const facts={founded:body.founded,capital:body.capital,address:body.address};
+    // Keep the company address consistent with the address published in this repository.
+    const facts={founded:body.founded,capital:body.capital};
     Object.entries(facts).forEach(([key,value])=>{const node=document.querySelector(`[data-about-${key}]`);if(node&&value)node.textContent=value});
     const grouped=Object.groupBy?Object.groupBy(item.media||[],x=>x.section):(item.media||[]).reduce((all,x)=>((all[x.section]||=[]).push(x),all),{});
     (body.media_sections_managed||[]).forEach(section=>{
