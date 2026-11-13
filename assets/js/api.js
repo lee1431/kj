@@ -2,10 +2,17 @@ const KIJ_API_ROOT='https://mrdindoin.ddns.net/kij/';
 const KIJ_API=`${KIJ_API_ROOT}api/content`;
 
 const escapeHTML=(value='')=>String(value).replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
-const mediaURL=(value='')=>new URL(value.replace(/^\//,''),KIJ_API_ROOT).href;
+const mediaURL=(value='')=>new URL(value, /^(?:assets|data)\//.test(value)?document.baseURI:KIJ_API_ROOT).href;
 const plainText=body=>typeof body==='string'?body:(body?.content||'');
 
+// Repository-managed content is the primary source; retain the legacy API fallback.
+let managedContentPromise;
 async function requestContent(type,slug=''){
+  managedContentPromise??=fetch(new URL('data/content.json',document.baseURI),{cache:'no-cache'})
+    .then(response=>{if(!response.ok)throw Error('Managed content unavailable');return response.json()})
+    .catch(()=>null);
+  const managed=await managedContentPromise;
+  if(managed&&Array.isArray(managed[type])){let rows=managed[type].filter(item=>item.published!==false);if(type==='notice')rows=[...rows].sort((a,b)=>Number(!!b.pinned)-Number(!!a.pinned));return slug?rows.filter(item=>item.slug===slug):rows;}
   const response=await fetch(`${KIJ_API}/${encodeURIComponent(type)}${slug?`/${encodeURIComponent(slug)}`:''}`,{headers:{Accept:'application/json'}});
   if(!response.ok) throw new Error(`API ${response.status}`);
   return response.json();
@@ -125,8 +132,8 @@ async function hydrateAboutPage(){
     const title=document.querySelector('[data-about-title]'); if(title&&body.greeting_title) title.textContent=body.greeting_title;
     const paragraphs=document.querySelector('[data-about-paragraphs]'); if(paragraphs&&Array.isArray(body.greeting_paragraphs)) paragraphs.innerHTML=body.greeting_paragraphs.map(text=>`<p>${escapeHTML(text)}</p>`).join('');
     const ceo=document.querySelector('[data-about-ceo]'); if(ceo&&body.ceo) ceo.textContent=body.ceo;
-    // Keep the company address consistent with the address published in this repository.
-    const facts={founded:body.founded,capital:body.capital};
+    // The administrator publishes company facts through repository-managed content.
+    const facts={founded:body.founded,capital:body.capital,address:body.address};
     Object.entries(facts).forEach(([key,value])=>{const node=document.querySelector(`[data-about-${key}]`);if(node&&value)node.textContent=value});
     const grouped=Object.groupBy?Object.groupBy(item.media||[],x=>x.section):(item.media||[]).reduce((all,x)=>((all[x.section]||=[]).push(x),all),{});
     (body.media_sections_managed||[]).forEach(section=>{
@@ -148,7 +155,14 @@ async function hydrateAboutPage(){
 async function hydrateBusinessPage(){
   try{
     const rows=await requestContent('business');
+    const slugs=new Set(rows.map(item=>item.slug));
+    document.querySelectorAll('.business-tab').forEach(tab=>{if(!slugs.has(tab.dataset.target)){document.getElementById(tab.dataset.target)?.remove();tab.remove()}});
     rows.forEach((item,index)=>{
+      if(!document.getElementById(item.slug)){
+        const panel=document.createElement('section');panel.id=item.slug;panel.className='business-panel';panel.innerHTML='<div class="business-panel-head"><div class="number"></div><div><h2></h2><p></p></div></div>';
+        (document.querySelector('.business-panel')?.parentElement||document.querySelector('main .container')).append(panel);
+        const button=document.createElement('button');button.className='business-tab';button.dataset.target=item.slug;button.innerHTML='<small></small><strong></strong>';button.addEventListener('click',()=>{document.querySelectorAll('.business-tab').forEach(t=>t.classList.toggle('active',t===button));document.querySelectorAll('.business-panel').forEach(p=>p.classList.toggle('active',p===panel))});document.querySelector('.business-tabs')?.append(button);
+      }
       const tab=document.querySelector(`.business-tab[data-target="${CSS.escape(item.slug)}"]`);
       const panel=document.getElementById(item.slug);
       if(tab){tab.querySelector('small').textContent=`${String(index+1).padStart(2,'0')} / ENGINEERING`;tab.querySelector('strong').textContent=item.title}
@@ -161,5 +175,8 @@ async function hydrateBusinessPage(){
       if(managedGallery)panel.querySelectorAll('.business-images').forEach(gallery=>gallery.remove());
       if(item.media?.length){let gallery=panel.querySelector('.managed-gallery');if(!gallery){gallery=document.createElement('div');gallery.className='business-images managed-gallery';panel.append(gallery)}gallery.innerHTML=item.media.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map(image=>`<img src="${mediaURL(image.url)}" alt="${escapeHTML(image.alt)}">`).join('')}
     });
+    const preferred=new URLSearchParams(location.search).get('section');
+    const first=(preferred&&slugs.has(preferred)?document.getElementById(preferred):document.querySelector('.business-panel.active'))||document.querySelector('.business-panel');
+    if(first){document.querySelectorAll('.business-panel').forEach(p=>p.classList.toggle('active',p===first));document.querySelectorAll('.business-tab').forEach(t=>t.classList.toggle('active',t.dataset.target===first.id))}
   }catch(error){console.warn('Business API unavailable',error)}
 }
