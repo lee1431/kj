@@ -32,8 +32,7 @@ async function stagePostFile(file,allowDocuments){
   let binary='';
   for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
   const path='assets/uploads/'+Date.now()+'-'+crypto.randomUUID().slice(0,8)+'.'+ext;
-  stage(path,btoa(binary),'base64');
-  return {url:new URL('../'+path,location.href).href,image};
+  return {path,encoded:btoa(binary),url:new URL('../'+path,location.href).href,image};
 }
 
 function decode(value){return new TextDecoder().decode(Uint8Array.from(atob(value.replace(/\s/g,'')),x=>x.charCodeAt(0)))}
@@ -71,25 +70,30 @@ const picker=el('input');picker.type='file';picker.multiple=true;
 picker.accept='.png,.jpg,.jpeg,.webp,.gif,.ico'+(allowsDocuments?',.pdf,.hwp,.hwpx,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt':'');
 uploadRow.append(picker);
 picker.onchange=async()=>{
+  if(busy)return;
   const chosen=[...picker.files];
+  if(!chosen.length)return;
+  busy=true;dirty();$('#main').inert=true;$('#nav').inert=true;$('#logout').disabled=true;$('#changeToken').disabled=true;
   try{
-    for(const file of chosen){
-      const result=await stagePostFile(file,allowsDocuments);
+    // Prepare the entire selection first, so a failed file leaves the draft intact.
+    const prepared=[];
+    for(const file of chosen)prepared.push({file,result:await stagePostFile(file,allowsDocuments)});
+    for(const {file,result} of prepared){
+      stage(result.path,result.encoded,'base64');
       if(result.image){item.media??=[];item.media.push({url:result.url,alt:file.name,section:'gallery',sort_order:item.media.length});}
       else{item.attachments??=[];item.attachments.push({url:result.url,name:file.name});}
     }
     if(chosen.length){touch();drawItem();status(chosen.length+'개 파일을 첨부했습니다. 오른쪽 위 변경사항 게시 버튼을 눌러야 실제 사이트에 반영됩니다.');}
-  }catch(error){touch();drawItem();status(error.message,true);}
-  finally{picker.value='';}
+  }catch(error){status(error.message+' 선택한 파일은 추가되지 않았습니다.',true);}
+  finally{picker.value='';busy=false;$('#main').inert=false;$('#nav').inert=false;$('#logout').disabled=false;$('#changeToken').disabled=false;dirty();}
 };
 const gallery=el('div');editor.append(el('h3','첨부 이미지'),gallery);item.media??=[];function drawMedia(){gallery.replaceChildren();item.media.forEach((m,i)=>{const box=el('div',undefined,'field-row');field(box,'이미지 주소',m.url,x=>{safeLink(x);m.url=x;touch()});field(box,'설명',m.alt,x=>{m.alt=x;touch()});field(box,'영역',m.section||'gallery',x=>{m.section=x;touch()});field(box,'정렬 순서',m.sort_order??i,x=>{m.sort_order=Number(x)||0;touch()},{type:'number'});if(m.url){const img=el('img');const stagedPath=new URL(m.url,location.href).pathname.replace(/^\/+/, '');const pending=staged.get(stagedPath);img.src=pending?.encoding==='base64'?'data:image/'+(m.url.split('.').pop()||'png')+';base64,'+pending.text:m.url;box.append(img)}button(box,'이미지 삭제',()=>{item.media.splice(i,1);touch();drawMedia()},'danger');gallery.append(box)})}drawMedia();button(editor,'이미지 추가',()=>{item.media.push({url:'',alt:'',section:'gallery',sort_order:item.media.length});touch();drawMedia()});if(allowsDocuments){
   const documents=el('div');
   editor.append(el('h3','첨부 문서'),documents);
-  item.attachments??=[];
   function drawDocuments(){
     documents.replaceChildren();
-    if(!item.attachments.length)documents.append(el('p','첨부된 문서가 없습니다.','muted'));
-    item.attachments.forEach((attachment,index)=>{
+    if(!item.attachments?.length)documents.append(el('p','첨부된 문서가 없습니다.','muted'));
+    (item.attachments||[]).forEach((attachment,index)=>{
       const row=el('div',undefined,'field-row');
       field(row,'파일명',attachment.name||'',value=>{attachment.name=value;touch()});
       field(row,'파일 주소',attachment.url||'',value=>{safeLink(value);attachment.url=value;touch()});
@@ -98,7 +102,7 @@ const gallery=el('div');editor.append(el('h3','첨부 이미지'),gallery);item.
     });
   }
   drawDocuments();
-  button(editor,'문서 주소 추가',()=>{item.attachments.push({name:'첨부파일',url:''});touch();drawDocuments()});
+  button(editor,'문서 주소 추가',()=>{item.attachments??=[];item.attachments.push({name:'첨부파일',url:''});touch();drawDocuments()});
 }
 const advanced=el('details'),summary=el('summary','전체 데이터 (고급)');advanced.append(summary);const raw=field(advanced,'JSON',JSON.stringify(item,null,2),()=>{},{area:true});raw.className='code';button(advanced,'전체 데이터 적용',()=>{const value=JSON.parse(raw.value);if(!value||Array.isArray(value)||typeof value!=='object'||!value.title)throw Error('제목이 있는 자료 객체를 입력해 주세요.');rows[selection]=value;touch();drawList();drawItem()});editor.append(advanced);const actions=el('div',undefined,'toolbar');editor.append(actions);button(actions,'목록 제목 갱신',drawList);button(actions,'위로 이동',()=>{if(selection<1)return;[rows[selection-1],rows[selection]]=[rows[selection],rows[selection-1]];selection--;touch();drawList()});button(actions,'아래로 이동',()=>{if(selection>=rows.length-1)return;[rows[selection+1],rows[selection]]=[rows[selection],rows[selection+1]];selection++;touch();drawList()});button(actions,'자료 삭제',()=>{if(!confirm(`“${item.title}” 자료를 삭제할까요? 게시 전까지 복구할 수 있습니다.`))return;rows.splice(selection,1);selection=Math.max(0,selection-1);touch();drawList();drawItem()},'danger')}
 drawList();drawItem()}

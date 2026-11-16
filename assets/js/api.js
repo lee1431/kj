@@ -10,7 +10,7 @@ function renderAttachmentLinks(item){
     if(!file||!file.url)return '';
     let url;
     try{url=mediaURL(file.url);if(!['http:','https:'].includes(new URL(url).protocol))return '';}catch{return '';}
-    return '<li><a href="'+escapeHTML(url)+'" target="_blank" rel="noopener noreferrer" download>'+escapeHTML(file.name||'첨부파일')+'</a></li>';
+    return '<li><a href="'+escapeHTML(url)+'" target="_blank" rel="noopener noreferrer" download="'+escapeHTML(file.name||'첨부파일')+'">'+escapeHTML(file.name||'첨부파일')+'</a></li>';
   }).filter(Boolean);
   return links.length?'<div class="content-attachments"><strong>첨부파일</strong><ul>'+links.join('')+'</ul></div>':'';
 }
