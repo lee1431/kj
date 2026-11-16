@@ -4,6 +4,17 @@ const KIJ_API=`${KIJ_API_ROOT}api/content`;
 const escapeHTML=(value='')=>String(value).replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
 const mediaURL=(value='')=>new URL(value, /^(?:assets|data)\//.test(value)?document.baseURI:KIJ_API_ROOT).href;
 const plainText=body=>typeof body==='string'?body:(body?.content||'');
+function renderAttachmentLinks(item){
+  const files=Array.isArray(item.attachments)?item.attachments:[];
+  const links=files.map(file=>{
+    if(!file||!file.url)return '';
+    let url;
+    try{url=mediaURL(file.url);if(!['http:','https:'].includes(new URL(url).protocol))return '';}catch{return '';}
+    return '<li><a href="'+escapeHTML(url)+'" target="_blank" rel="noopener noreferrer" download>'+escapeHTML(file.name||'첨부파일')+'</a></li>';
+  }).filter(Boolean);
+  return links.length?'<div class="content-attachments"><strong>첨부파일</strong><ul>'+links.join('')+'</ul></div>':'';
+}
+
 
 // Repository-managed content is the primary source; retain the legacy API fallback.
 let managedContentPromise;
@@ -29,14 +40,15 @@ async function renderNotices(target,limit){
     target.innerHTML=items.length?items.map((item,index)=>{
       const date=(item.year||item.created_at||'').slice(0,10);
       const text=plainText(item.body);
-      const image=item.media?.[0];
+      const images=(item.media||[]).filter(image=>image.url).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map(image=>'<img src="'+escapeHTML(mediaURL(image.url))+'" alt="'+escapeHTML(image.alt)+'">').join('');
+      const attachments=renderAttachmentLinks(item);
       return `<article class="content-row" data-content-detail>
         <span>${item.pinned?'공지':String(index+1).padStart(2,'0')}</span>
-        <div><strong>${escapeHTML(item.title)}</strong>${item.summary?`<p>${escapeHTML(item.summary)}</p>`:''}${text||image?`<div class="content-detail">${escapeHTML(text).replace(/\n/g,'<br>')}${image?`<img src="${mediaURL(image.url)}" alt="${escapeHTML(image.alt)}">`:''}</div>`:''}</div>
+        <div><strong>${escapeHTML(item.title)}</strong>${item.summary?`<p>${escapeHTML(item.summary)}</p>`:''}${text||images||attachments?`<div class="content-detail">${escapeHTML(text).replace(/\n/g,'<br>')}${images}${attachments}</div>`:''}</div>
         <time>${escapeHTML(date)}</time>
       </article>`;
     }).join(''):'<div class="empty">등록된 공지사항이 없습니다.</div>';
-    target.querySelectorAll('[data-content-detail]').forEach(row=>row.addEventListener('click',()=>row.classList.toggle('open')));
+    target.querySelectorAll('[data-content-detail]').forEach(row=>row.addEventListener('click',event=>{if(event.target.closest('a'))return;row.classList.toggle('open')}));
   }catch(error){showAPIError(target,'공지사항 준비 중입니다.')}
 }
 
@@ -48,7 +60,7 @@ async function renderProjects(target){
       return `<article class="project-card">
         ${cover?`<img src="${mediaURL(cover.url)}" alt="${escapeHTML(cover.alt)}">`:''}
         <div><span class="eyebrow">${escapeHTML(item.category||'Project')}</span><h3>${escapeHTML(item.title)}</h3>
-        <p>${escapeHTML(item.summary||plainText(item.body))}</p><dl>${item.client?`<div><dt>CLIENT</dt><dd>${escapeHTML(item.client)}</dd></div>`:''}${item.year?`<div><dt>YEAR</dt><dd>${escapeHTML(item.year)}</dd></div>`:''}</dl></div>
+        <p>${escapeHTML(item.summary||plainText(item.body))}</p>${renderAttachmentLinks(item)}<dl>${item.client?`<div><dt>CLIENT</dt><dd>${escapeHTML(item.client)}</dd></div>`:''}${item.year?`<div><dt>YEAR</dt><dd>${escapeHTML(item.year)}</dd></div>`:''}</dl></div>
       </article>`;
     }).join(''):'<div class="empty">등록된 실적이 없습니다.</div>';
   }catch(error){showAPIError(target,'실적 자료 준비 중입니다.')}
@@ -66,7 +78,7 @@ async function initPortfolioArchive(){
     count.textContent=rows.length.toLocaleString('ko-KR');
     const pages=Math.max(1,Math.ceil(rows.length/state.pageSize));state.page=Math.min(state.page,pages);
     const visible=rows.slice((state.page-1)*state.pageSize,state.page*state.pageSize);
-    target.innerHTML=visible.length?visible.map(item=>{const extra=[bodyValue(item,'region'),bodyValue(item,'diagnosis_grade'),bodyValue(item,'note')].filter(Boolean).join(' · ');return `<tr><td data-label="연도"><strong>${escapeHTML(item.year||'-')}</strong></td><td data-label="사업 분야"><span class="portfolio-category">${escapeHTML(item.category||'-')}</span></td><td data-label="용역명"><strong class="portfolio-project">${escapeHTML(item.title)}</strong>${item.summary?`<small>${escapeHTML(item.summary)}</small>`:''}</td><td data-label="발주기관">${escapeHTML(item.client||'-')}</td><td data-label="지역·비고">${escapeHTML(extra||'-')}</td></tr>`}).join(''):'<tr><td colspan="5" class="empty">조건에 맞는 실적이 없습니다.</td></tr>';
+    target.innerHTML=visible.length?visible.map(item=>{const extra=[bodyValue(item,'region'),bodyValue(item,'diagnosis_grade'),bodyValue(item,'note')].filter(Boolean).join(' · ');return `<tr><td data-label="연도"><strong>${escapeHTML(item.year||'-')}</strong></td><td data-label="사업 분야"><span class="portfolio-category">${escapeHTML(item.category||'-')}</span></td><td data-label="용역명"><strong class="portfolio-project">${escapeHTML(item.title)}</strong>${item.summary?`<small>${escapeHTML(item.summary)}</small>`:''}${renderAttachmentLinks(item)}</td><td data-label="발주기관">${escapeHTML(item.client||'-')}</td><td data-label="지역·비고">${escapeHTML(extra||'-')}</td></tr>`}).join(''):'<tr><td colspan="5" class="empty">조건에 맞는 실적이 없습니다.</td></tr>';
     const from=Math.max(1,Math.min(state.page-2,pages-4)),to=Math.min(pages,from+4);let buttons=`<button type="button" data-page="${state.page-1}" ${state.page===1?'disabled':''}>이전</button>`;for(let p=from;p<=to;p++)buttons+=`<button type="button" data-page="${p}" class="${p===state.page?'active':''}">${p}</button>`;buttons+=`<button type="button" data-page="${state.page+1}" ${state.page===pages?'disabled':''}>다음</button>`;pagination.innerHTML=buttons;
   };
   try{
