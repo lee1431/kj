@@ -24320,14 +24320,10 @@
       "id": 11,
       "media": [
         {
+          "url": "https://kijeng.co.kr/assets/uploads/1794803007285-12f99cad.png",
           "alt": "kj-symbol.png",
-          "created_at": "2026-08-23T11:05:21+00:00",
-          "file_name": "e2741679d93e45c1ba42f302d72721bf.webp",
-          "id": 1,
-          "item_id": 11,
           "section": "gallery",
-          "sort_order": 1,
-          "url": "https://mrdindoin.ddns.net/kij/uploads/e2741679d93e45c1ba42f302d72721bf.webp"
+          "sort_order": 1
         }
       ],
       "pinned": false,
@@ -24338,7 +24334,8 @@
       "title": "2026 홈페이지 리뉴얼",
       "type": "notice",
       "updated_at": "2026-08-23T11:05:21+00:00",
-      "year": "2026"
+      "year": "2026",
+      "attachments": []
     }
   ]
 }
